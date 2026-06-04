@@ -17,13 +17,26 @@
 
 这个 skill 的核心流程是：
 
-1. Codex 先检查工作区、分支、git 状态和 Claude Code CLI。
-2. Codex 根据任务大小、风险和当前上下文写清楚派发 prompt。
-3. Claude Code 在终端中执行任务。
-4. Codex 按任务大小等待，避免频繁轮询浪费 token。
-5. Claude Code 完成后，Codex 读取 diff、运行验证命令、独立 review。
-6. 如果结果不好，Codex 会给 Claude Code 发精确修复任务。
-7. 直到验证通过，或多次失败后由 Codex 接手/报告阻塞。
+1. 如果任务只是方向或范围较大，Codex 先用 `planning-with-files` 在目标项目里写出可执行计划。
+2. Codex 从计划里选择一个叶子任务，检查工作区、分支、git 状态和 Claude Code CLI。
+3. Codex 根据任务大小、风险和当前上下文写清楚派发 prompt。
+4. Claude Code 在终端中执行任务。
+5. Codex 按任务大小等待，避免频繁轮询浪费 token。
+6. Claude Code 完成后，Codex 读取 diff、运行验证命令、独立 review。
+7. 如果结果不好，Codex 会给 Claude Code 发精确修复任务。
+8. 直到验证通过，或多次失败后由 Codex 接手/报告阻塞。
+
+## 计划优先规则
+
+如果用户给的是“继续重构”“拆分这个模块”“优化这个流程”这类方向性任务，Codex 不应该直接把模糊目标交给 Claude Code。更稳妥的方式是先用 `planning-with-files` 建立文件化计划，再派发单个可执行任务。
+
+计划通常记录在目标项目中：
+
+- `task_plan.md`：阶段、任务编号、状态、验收标准、回滚点。
+- `findings.md`：旧逻辑链路、新单数据流入口、分支条件、接口调用、状态变更、UI 不变项。
+- `progress.md`：派发记录、Claude 执行结果、Codex review 结论、验证结果。
+
+派发给 Claude Code 的必须是计划里的叶子任务。计划文件是工作记忆，不是最终指令；Codex 仍然需要在派发 prompt 中重复任务范围、约束、验证命令和不可变行为。
 
 ## 安装
 
@@ -95,10 +108,12 @@ claude-code-dispatcher/
 - 可验证的重构步骤
 - 先由 Claude Code 实现，再由 Codex review 的任务
 - 需要长时间构建、测试、等待的任务
+- 已经通过 `planning-with-files` 拆清楚的叶子任务
 
 ## 不适合的任务类型
 
 - 需要 Codex 立即亲自判断的高风险线上事故修复
 - 缺少明确范围的大规模无边界重构
+- 没有计划、没有验收标准的方向性重构
 - 需要 Claude Code 自主 push 或发布的任务
 - 需要绕过权限或使用 sudo 的任务

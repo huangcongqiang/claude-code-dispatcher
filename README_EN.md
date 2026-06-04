@@ -17,13 +17,26 @@ The skill is not meant to let Claude Code decide final quality by itself. Codex 
 
 The skill follows this process:
 
-1. Codex checks the workspace, branch, git state, and Claude Code CLI.
-2. Codex writes a scoped dispatch prompt based on task size, risk, and current context.
-3. Claude Code runs the task in the terminal.
-4. Codex waits according to task size to avoid noisy polling.
-5. Codex inspects the diff, runs verification commands, and reviews the result.
-6. If the result is not good enough, Codex sends Claude Code a targeted repair prompt.
-7. The loop stops when verification passes or repeated repair attempts hit a real blocker.
+1. If the task is broad or only directional, Codex first uses `planning-with-files` to create an executable plan in the target project.
+2. Codex selects one leaf task from the plan, then checks the workspace, branch, git state, and Claude Code CLI.
+3. Codex writes a scoped dispatch prompt based on task size, risk, and current context.
+4. Claude Code runs the task in the terminal.
+5. Codex waits according to task size to avoid noisy polling.
+6. Codex inspects the diff, runs verification commands, and reviews the result.
+7. If the result is not good enough, Codex sends Claude Code a targeted repair prompt.
+8. The loop stops when verification passes or repeated repair attempts hit a real blocker.
+
+## Planning-First Rule
+
+When the user gives a direction such as "continue the refactor", "split this module", or "optimize this flow", Codex should not hand a vague goal directly to Claude Code. The safer pattern is to use `planning-with-files` first, then dispatch a single executable task.
+
+The plan normally lives in the target project:
+
+- `task_plan.md`: phases, task IDs, status, acceptance criteria, rollback points.
+- `findings.md`: old logic chain, new data-flow entry, branch conditions, API calls, state mutations, UI invariants.
+- `progress.md`: dispatch history, Claude result, Codex review conclusion, verification result.
+
+Claude Code should receive a leaf task from the plan. The planning files are working memory, not a replacement for an executable dispatch prompt; Codex should still repeat the exact scope, constraints, verification commands, and behavior that must remain unchanged.
 
 ## Installation
 
@@ -95,10 +108,12 @@ claude-code-dispatcher/
 - Verifiable refactor slices
 - Tasks where Claude Code implements and Codex reviews
 - Work that benefits from long waits for builds or tests
+- Leaf tasks that have already been broken down with `planning-with-files`
 
 ## Poor Fit
 
 - High-risk production incidents that require immediate Codex judgment
 - Broad refactors without a clear scope
+- Directional refactors without a plan or acceptance criteria
 - Tasks that require Claude Code to push or deploy by itself
 - Tasks requiring sudo or permission bypasses

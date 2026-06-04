@@ -16,12 +16,32 @@ Use Claude Code as a worker process while Codex stays responsible for scoping, v
 - Default to no `git push`, no `git commit`, no destructive git operations, and no broad checkout/reset.
 - Preserve user changes. If unrelated dirty files exist, ignore them unless they affect the task.
 - If the task is risky, narrow it before dispatching: one work package, one feature slice, or one cleanup class.
+- For broad direction-setting tasks, use `planning-with-files` first: write the executable plan in the target project, then dispatch only one leaf task from that plan.
 - If Claude makes a poor change, send a focused repair prompt with exact findings; do not silently fix a large worker mistake unless it is smaller and safer for Codex to patch directly.
 - Keep user updates sparse while Claude runs. When the user is conserving tokens, wait longer instead of polling frequently.
 
 ## Workflow
 
-### 1. Preflight
+### 1. Planning Gate
+
+Before dispatching, decide whether the user's request is already an executable task or only a direction.
+
+Use `planning-with-files` first when the task has any of these traits:
+
+- It touches multiple business chains, domains, or large components.
+- It requires more than a small focused edit, or likely needs many tool calls.
+- It has high regression risk, such as prescription submission, IM messages, unread counts, caching, or cleanup of old runtime logic.
+- The user gives a direction like "continue the refactor", "split this module", or "optimize this flow" without exact files and acceptance criteria.
+
+When planning is needed, create or update the target project's plan files before starting Claude:
+
+- `task_plan.md`: phases, task IDs, statuses, acceptance criteria, rollback points.
+- `findings.md`: old logic chain, new data-flow entry, branch conditions, API calls, state mutations, UI invariants.
+- `progress.md`: dispatch history, Claude results, Codex review findings, verification results.
+
+The dispatchable unit should be a leaf task from the plan. Do not ask Claude to handle a vague direction. The prompt should point to the relevant plan section but still repeat the exact scope and constraints, because plan files are memory, not a substitute for an executable dispatch prompt.
+
+### 2. Preflight
 
 Run lightweight checks before dispatch:
 
@@ -34,7 +54,7 @@ command -v claude && claude --version
 
 If a Claude worker from this same dispatch is still running, do not start another one. Wait for it or stop only if the user asks.
 
-### 2. Choose Task Size and Wait Policy
+### 3. Choose Task Size and Wait Policy
 
 Use the task size to decide how long to wait before polling:
 
@@ -46,12 +66,13 @@ Use the task size to decide how long to wait before polling:
 
 After the first wait, poll every 2-5 minutes depending on expected runtime. Do not emit frequent progress messages unless the user asks for status.
 
-### 3. Build the Dispatch Prompt
+### 4. Build the Dispatch Prompt
 
 The prompt must be explicit and self-contained. Include:
 
 - Workspace path and current branch.
 - Exact task name and goal.
+- Plan reference when using `planning-with-files`: file path, task ID, and the specific section Claude should follow.
 - Hard constraints: no push/commit/reset, no UI/interaction change unless requested, do not touch build artifacts, preserve existing user changes.
 - Allowed scope and files/directories.
 - Expected comments/documentation requirements.
@@ -70,13 +91,13 @@ PROMPT
 
 Add more `--disallowedTools` entries for task-specific hazards, such as deploy commands or broad file deletes. If the task only needs analysis, use `--permission-mode default` and forbid edit tools.
 
-### 4. Wait Efficiently
+### 5. Wait Efficiently
 
 Let the Claude process run. In Codex Desktop, use the running session and wait according to the size policy. For medium tasks, a 5-minute wait is preferred over repeated short polling when the user wants to save tokens.
 
 If the process exits with no useful output, inspect `git status --short` and recent diffs before deciding whether it failed.
 
-### 5. Independent Review
+### 6. Independent Review
 
 After Claude finishes:
 
@@ -104,8 +125,11 @@ Review with findings first:
 - Verification gaps or false documentation.
 - Over-broad edits, artifact churn, or changed UI/interaction.
 - Missing comments where the user explicitly requested detailed comments.
+- Mismatch with the planning file's old-logic chain, branch conditions, or acceptance criteria.
 
-### 6. Iterate if Needed
+If the task used `planning-with-files`, update `progress.md` after review. If a phase is complete, update `task_plan.md`; if new old-logic details or risks were discovered, update `findings.md`.
+
+### 7. Iterate if Needed
 
 If the result is not satisfactory, send a repair prompt to Claude with:
 
@@ -130,6 +154,9 @@ Workspace:
 
 Current branch:
 <branch>
+
+Plan reference:
+<task_plan.md path / task ID / relevant findings.md section, or "none">
 
 Task:
 <WP/name>
