@@ -1,0 +1,6 @@
+interface:
+  display_name: "Claude Code Dispatcher"
+  short_description: "派发 Claude Code 任务并复核结果流程"
+  default_prompt: "Use $claude-code-dispatcher to delegate this task to Claude Code, wait for completion, then review and iterate."
+policy:
+  allow_implicit_invocation: true
