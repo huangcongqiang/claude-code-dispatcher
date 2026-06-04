@@ -9,6 +9,7 @@
 ## 适用场景
 
 - 想节约 Codex 当前会话 token，让 Claude Code 先完成一批代码或文档工作。
+- 已经给 Claude Code 配好了 DeepSeek 等低成本模型，希望用它先执行、再由 Codex review。
 - 需要 Codex 指挥 Claude Code 做实现，然后再由 Codex 做 code review。
 - 需要把较大的任务拆成明确工作包，交给 Claude Code 执行，完成后继续迭代到满意。
 - 不希望 Claude Code 自己决定最终质量，需要 Codex 独立验证结果。
@@ -37,6 +38,12 @@
 - `progress.md`：派发记录、Claude 执行结果、Codex review 结论、验证结果。
 
 派发给 Claude Code 的必须是计划里的叶子任务。计划文件是工作记忆，不是最终指令；Codex 仍然需要在派发 prompt 中重复任务范围、约束、验证命令和不可变行为。
+
+## 成本控制
+
+如果本机 Claude Code 已经配置了 DeepSeek 或其他低成本模型，可以把它作为执行 worker 使用，适合做实现、清理和文档类任务。这个 skill 不负责讲解或修改 Claude Code 的模型配置，只负责在模型已配置好的前提下派发任务、等待结果、review diff 和继续修复派发。
+
+低成本模型只负责“做”，最终是否通过仍由 Codex 的 review、验证命令和业务逻辑对比决定。
 
 ## 安装
 
@@ -109,6 +116,7 @@ claude-code-dispatcher/
 - 先由 Claude Code 实现，再由 Codex review 的任务
 - 需要长时间构建、测试、等待的任务
 - 已经通过 `planning-with-files` 拆清楚的叶子任务
+- 已配置 DeepSeek 等低成本 worker 模型的执行任务
 
 ## 不适合的任务类型
 

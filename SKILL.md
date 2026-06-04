@@ -17,6 +17,7 @@ Use Claude Code as a worker process while Codex stays responsible for scoping, v
 - Preserve user changes. If unrelated dirty files exist, ignore them unless they affect the task.
 - If the task is risky, narrow it before dispatching: one work package, one feature slice, or one cleanup class.
 - For broad direction-setting tasks, use `planning-with-files` first: write the executable plan in the target project, then dispatch only one leaf task from that plan.
+- If Claude Code has already been configured to use DeepSeek or another low-cost model, it is a good worker choice for execution. Do not manage model setup inside this skill; Codex still owns review and final judgment.
 - If Claude makes a poor change, send a focused repair prompt with exact findings; do not silently fix a large worker mistake unless it is smaller and safer for Codex to patch directly.
 - Keep user updates sparse while Claude runs. When the user is conserving tokens, wait longer instead of polling frequently.
 
@@ -40,6 +41,12 @@ When planning is needed, create or update the target project's plan files before
 - `progress.md`: dispatch history, Claude results, Codex review findings, verification results.
 
 The dispatchable unit should be a leaf task from the plan. Do not ask Claude to handle a vague direction. The prompt should point to the relevant plan section but still repeat the exact scope and constraints, because plan files are memory, not a substitute for an executable dispatch prompt.
+
+### Cost-Aware Worker Model
+
+When Claude Code is already configured with DeepSeek or another lower-cost model, prefer using that configured model for implementation, cleanup, and documentation work. The model is only the worker; Codex must still inspect the diff, run verification, and decide whether the result is acceptable.
+
+Do not turn this skill into a model-setup guide. If the configured model is unavailable, fall back to the local Claude Code default or ask the user to fix Claude Code's model configuration.
 
 ### 2. Preflight
 

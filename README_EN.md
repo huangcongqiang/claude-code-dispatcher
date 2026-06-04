@@ -9,6 +9,7 @@ The skill is not meant to let Claude Code decide final quality by itself. Codex 
 ## When To Use
 
 - You want to save Codex conversation tokens by letting Claude Code perform a focused implementation task.
+- Claude Code is already configured with DeepSeek or another lower-cost model, and you want it to execute before Codex reviews.
 - You want Codex to dispatch work to Claude Code, then independently review the result.
 - You need a larger task split into a concrete work package and iterated until acceptable.
 - You do not want to rely on Claude Code's own summary as the final quality gate.
@@ -37,6 +38,12 @@ The plan normally lives in the target project:
 - `progress.md`: dispatch history, Claude result, Codex review conclusion, verification result.
 
 Claude Code should receive a leaf task from the plan. The planning files are working memory, not a replacement for an executable dispatch prompt; Codex should still repeat the exact scope, constraints, verification commands, and behavior that must remain unchanged.
+
+## Cost Control
+
+If the local Claude Code setup already uses DeepSeek or another lower-cost model, it can be used as the execution worker for implementation, cleanup, and documentation tasks. This skill does not explain or modify Claude Code model configuration; it assumes the model is already configured and focuses on dispatching, waiting, diff review, and repair prompts.
+
+The lower-cost model only does the work. Codex still decides whether the result passes review, verification, and business-logic comparison.
 
 ## Installation
 
@@ -109,6 +116,7 @@ claude-code-dispatcher/
 - Tasks where Claude Code implements and Codex reviews
 - Work that benefits from long waits for builds or tests
 - Leaf tasks that have already been broken down with `planning-with-files`
+- Execution tasks where Claude Code already has a lower-cost worker model configured
 
 ## Poor Fit
 
