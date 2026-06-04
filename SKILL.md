@@ -20,6 +20,7 @@ Use Claude Code as a worker process while Codex stays responsible for scoping, v
 - If Claude Code has already been configured to use DeepSeek or another low-cost model, it is a good worker choice for execution. Do not manage model setup inside this skill; Codex still owns review and final judgment.
 - If Claude makes a poor change, send a focused repair prompt with exact findings; do not silently fix a large worker mistake unless it is smaller and safer for Codex to patch directly.
 - Keep user updates sparse while Claude runs. When the user is conserving tokens, wait longer instead of polling frequently.
+- Continuous work is allowed only as a controlled queue: run one Claude worker at a time, review the result, update the queue state, then dispatch the next queued leaf task if the previous one passed.
 
 ## Workflow
 
@@ -41,6 +42,35 @@ When planning is needed, create or update the target project's plan files before
 - `progress.md`: dispatch history, Claude results, Codex review findings, verification results.
 
 The dispatchable unit should be a leaf task from the plan. Do not ask Claude to handle a vague direction. The prompt should point to the relevant plan section but still repeat the exact scope and constraints, because plan files are memory, not a substitute for an executable dispatch prompt.
+
+### Continuous Queue Mode
+
+Use this mode when the user explicitly asks for continuous tasks, a task queue, or wording like "1-10 tasks, review each one, then automatically start the next."
+
+Continuous queue mode means **serial automation with review gates**, not parallel or unattended delegation:
+
+1. Create or update a bounded queue in the target project's planning files. Use an existing `task_plan.md` table when possible; add a `dispatch_queue.md` only when the queue needs extra detail.
+2. Each queue item must be a leaf task with:
+   - task ID and status
+   - allowed files or directories
+   - forbidden changes
+   - acceptance criteria
+   - verification commands
+   - rollback point
+3. Dispatch only the first eligible item with status `Not Started` or `Ready`.
+4. After Claude finishes, independently review the diff and run verification before changing the item to `Done`.
+5. If review passes, update `progress.md` and automatically continue to the next queued item.
+6. If review fails, mark the item `Fixing`, send Claude one focused repair prompt, and repeat review.
+7. Stop the queue and report status when:
+   - the queue is empty
+   - a task is `Blocked`
+   - the same task fails after 2-3 repair attempts
+   - Claude touches files outside the allowed scope
+   - verification fails for a reason that needs user or external input
+   - the next item is high risk and lacks acceptance criteria or P0 evidence
+   - the user interrupts, pauses, or changes direction
+
+Keep the invariant: at most one Claude Code process is active for this queue unless the user explicitly asks for parallel workers.
 
 ### Cost-Aware Worker Model
 
@@ -136,6 +166,16 @@ Review with findings first:
 
 If the task used `planning-with-files`, update `progress.md` after review. If a phase is complete, update `task_plan.md`; if new old-logic details or risks were discovered, update `findings.md`.
 
+For continuous queue mode, also update the queue item status after each review:
+
+- `Not Started`: not yet dispatched
+- `In Progress`: currently assigned to Claude
+- `Review`: Claude finished and Codex is checking it
+- `Fixing`: repair prompt sent after review findings
+- `Done`: Codex verified and accepted it
+- `Blocked`: cannot continue safely without user input or external state
+- `Skipped`: intentionally skipped with a recorded reason
+
 ### 7. Iterate if Needed
 
 If the result is not satisfactory, send a repair prompt to Claude with:
@@ -152,6 +192,33 @@ Stop the loop when:
 
 - Verification passes and review has no blocking findings, or
 - The same issue fails after 2-3 repair attempts, at which point Codex should either patch directly or report the blocker.
+
+In continuous queue mode, this "stop" applies to the current queue item. If the item reaches `Done`, continue to the next queued item automatically. If the item reaches `Blocked`, stop the whole queue and summarize what was completed, what failed, and the next safe action.
+
+## Continuous Queue Template
+
+Use this compact queue table inside `task_plan.md` or `dispatch_queue.md`:
+
+```markdown
+| Order | Task ID | Goal | Allowed Scope | Verification | Status | Notes |
+| ---: | --- | --- | --- | --- | --- | --- |
+| 1 | T01 | <one leaf task> | <files/dirs> | <commands> | Not Started | <rollback/P0 notes> |
+| 2 | T02 | <one leaf task> | <files/dirs> | <commands> | Not Started | <rollback/P0 notes> |
+```
+
+Dispatch cycle:
+
+```text
+select next Not Started/Ready item
+mark In Progress
+dispatch Claude
+wait by task size
+mark Review
+inspect diff + run verification
+if pass: mark Done and continue
+if fail: mark Fixing and send focused repair prompt
+if still fail or unsafe: mark Blocked and stop queue
+```
 
 ## Dispatch Prompt Template
 

@@ -12,6 +12,7 @@ The skill is not meant to let Claude Code decide final quality by itself. Codex 
 - Claude Code is already configured with DeepSeek or another lower-cost model, and you want it to execute before Codex reviews.
 - You want Codex to dispatch work to Claude Code, then independently review the result.
 - You need a larger task split into a concrete work package and iterated until acceptable.
+- You want to place 1-10 tasks into a queue, have Codex dispatch them to Claude Code one by one, review each result, then automatically continue to the next accepted task.
 - You do not want to rely on Claude Code's own summary as the final quality gate.
 
 ## Workflow
@@ -26,6 +27,40 @@ The skill follows this process:
 6. Codex inspects the diff, runs verification commands, and reviews the result.
 7. If the result is not good enough, Codex sends Claude Code a targeted repair prompt.
 8. The loop stops when verification passes or repeated repair attempts hit a real blocker.
+
+## Continuous Task Queue
+
+This skill supports continuous tasks, but not unattended bulk execution by Claude Code. The recommended model is "serial automation with review gates":
+
+```text
+Task 1 -> dispatch Claude -> Codex review/verification
+  -> pass: mark Done and automatically start Task 2
+  -> fail: dispatch a focused repair; after repeated failures, mark Blocked and stop
+
+Task 2 -> dispatch Claude -> Codex review/verification
+...
+until the queue is complete or blocked
+```
+
+The queue can live in the target project's `task_plan.md`; use `dispatch_queue.md` only when the queue needs more detail. Each task must be a leaf task and include:
+
+- task ID and status
+- allowed files or directories
+- forbidden scope
+- acceptance criteria
+- verification commands
+- rollback point or P0 risk
+
+By default, only one Claude Code worker runs at a time. The next task is dispatched only after Codex has reviewed the diff and passed the required scans, lint, build, or other verification for the current task.
+
+The queue stops when:
+
+- the queue is complete
+- the current task fails verification and needs user or external input
+- Claude Code changes files outside the allowed scope
+- the same task still fails after 2-3 repair attempts
+- the next task lacks clear acceptance criteria or required P0 evidence
+- the user interrupts, pauses, or changes direction
 
 ## Planning-First Rule
 
@@ -117,11 +152,13 @@ claude-code-dispatcher/
 - Work that benefits from long waits for builds or tests
 - Leaf tasks that have already been broken down with `planning-with-files`
 - Execution tasks where Claude Code already has a lower-cost worker model configured
+- Continuous task queues with clear boundaries and per-task acceptance checks
 
 ## Poor Fit
 
 - High-risk production incidents that require immediate Codex judgment
 - Broad refactors without a clear scope
 - Directional refactors without a plan or acceptance criteria
+- Bulk task execution where Claude Code runs many tasks without Codex review between them
 - Tasks that require Claude Code to push or deploy by itself
 - Tasks requiring sudo or permission bypasses

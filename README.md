@@ -12,6 +12,7 @@
 - 已经给 Claude Code 配好了 DeepSeek 等低成本模型，希望用它先执行、再由 Codex review。
 - 需要 Codex 指挥 Claude Code 做实现，然后再由 Codex 做 code review。
 - 需要把较大的任务拆成明确工作包，交给 Claude Code 执行，完成后继续迭代到满意。
+- 希望把 1-10 个任务放进队列里，由 Codex 逐个派发给 Claude Code，逐个 review，通过后自动进入下一个。
 - 不希望 Claude Code 自己决定最终质量，需要 Codex 独立验证结果。
 
 ## 工作方式
@@ -26,6 +27,40 @@
 6. Claude Code 完成后，Codex 读取 diff、运行验证命令、独立 review。
 7. 如果结果不好，Codex 会给 Claude Code 发精确修复任务。
 8. 直到验证通过，或多次失败后由 Codex 接手/报告阻塞。
+
+## 连续任务队列
+
+这个 skill 支持连续任务，但不是让 Claude Code 无人值守地一次性跑完整串任务。推荐模式是“串行自动化 + review gate”：
+
+```text
+任务 1 -> 派发 Claude -> Codex review/验证
+  -> 通过：标记 Done，自动开始任务 2
+  -> 不通过：派发精确修复；多次失败后标记 Blocked 并停止队列
+
+任务 2 -> 派发 Claude -> Codex review/验证
+...
+直到队列完成或遇到阻塞
+```
+
+队列可以写在目标项目的 `task_plan.md`，复杂时也可以新增 `dispatch_queue.md`。每个任务都必须是叶子任务，并写清楚：
+
+- 任务 ID 和状态
+- 允许修改的文件或目录
+- 禁止修改的范围
+- 验收标准
+- 验证命令
+- 回滚点或 P0 风险
+
+默认同一时间只运行一个 Claude Code worker。只有当前任务通过 Codex review、扫描、lint、build 或其它验证后，才会自动派发下一个任务。
+
+队列会在以下情况停止：
+
+- 队列完成
+- 当前任务验证失败且需要用户或外部数据
+- Claude Code 修改了允许范围之外的文件
+- 同一任务修复 2-3 次仍无法通过
+- 下一任务缺少明确验收标准或 P0 证据
+- 用户打断、暂停或改变方向
 
 ## 计划优先规则
 
@@ -117,11 +152,13 @@ claude-code-dispatcher/
 - 需要长时间构建、测试、等待的任务
 - 已经通过 `planning-with-files` 拆清楚的叶子任务
 - 已配置 DeepSeek 等低成本 worker 模型的执行任务
+- 有明确边界、可以逐个验收的连续任务队列
 
 ## 不适合的任务类型
 
 - 需要 Codex 立即亲自判断的高风险线上事故修复
 - 缺少明确范围的大规模无边界重构
 - 没有计划、没有验收标准的方向性重构
+- 希望 Claude Code 不经过 Codex review 就连续跑完的大批任务
 - 需要 Claude Code 自主 push 或发布的任务
 - 需要绕过权限或使用 sudo 的任务
