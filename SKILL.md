@@ -9,18 +9,53 @@ description: Use when the user wants Codex to delegate implementation or cleanup
 
 Use Claude Code as a worker process while Codex stays responsible for scoping, verification, review, and final judgment. Claude may edit files, but Codex owns the dispatch prompt, waits efficiently, independently reviews the result, and asks Claude for targeted fixes when needed.
 
+Think of the relationship as **technical lead and implementation member**:
+
+- Codex is the lead. Codex decomposes the work, defines boundaries, chooses the acceptance criteria, reviews the diff, runs verification, and decides whether the work is done.
+- Claude Code is the implementation member. Claude should do the actual coding, extraction, cleanup, and documentation inside the assigned scope, including runtime code changes when the task calls for them.
+- A good dispatch is not "ask Claude to be careful"; it is "give Claude a complete, bounded implementation slice with clear invariants and let it execute."
+
 ## Core Rules
 
 - Start at most one Claude Code worker for a task unless the user explicitly asks for parallel workers.
 - Do not trust Claude's summary. Always inspect the diff and run independent verification.
 - Default to no `git push`, no `git commit`, no destructive git operations, and no broad checkout/reset.
 - Preserve user changes. If unrelated dirty files exist, ignore them unless they affect the task.
-- If the task is risky, narrow it before dispatching: one work package, one feature slice, or one cleanup class.
-- For broad direction-setting tasks, use `planning-with-files` first: write the executable plan in the target project, then dispatch only one leaf task from that plan.
+- Runtime code changes are allowed when the assigned task is an implementation or refactor slice. Do not restrict Claude to documentation/readiness work unless the user explicitly asks for analysis only.
+- If the task is risky, narrow it to one cohesive business slice, feature flow, component extraction, or cleanup class. Do not shrink it so far that progress becomes cosmetic.
+- For broad direction-setting tasks, use `planning-with-files` first: write the executable plan in the target project, then dispatch one bounded implementation slice from that plan.
 - If Claude Code has already been configured to use DeepSeek or another low-cost model, it is a good worker choice for execution. Do not manage model setup inside this skill; Codex still owns review and final judgment.
 - If Claude makes a poor change, send a focused repair prompt with exact findings; do not silently fix a large worker mistake unless it is smaller and safer for Codex to patch directly.
 - Keep user updates sparse while Claude runs. When the user is conserving tokens, wait longer instead of polling frequently.
-- Continuous work is allowed only as a controlled queue: run one Claude worker at a time, review the result, update the queue state, then dispatch the next queued leaf task if the previous one passed.
+- Continuous work is allowed as a controlled queue: run one Claude worker at a time, review the result, update the queue state, then dispatch the next queued implementation slice if the previous one passed.
+- Prefer fewer, larger, well-bounded tasks over many tiny tasks when the user wants real refactor progress and Codex can review the result.
+
+## Managed Delegated Implementation Mode
+
+Use this mode when the user wants to save Codex tokens, accelerate refactoring, or says Claude Code should be the worker while Codex reviews.
+
+The default posture in this mode is: **Claude implements, Codex governs.**
+
+Good Claude-sized tasks:
+
+- One business chain, such as prescription detail loading, submit response handling, cache restore, IM message classification, unread/last-message sync, or automatic-close display.
+- One large-component slimming slice, such as extracting a cohesive method group from a 4000+ line Vue file into a `singleDataFlow/useCases/*` execution-layer file.
+- One cleanup class, such as removing a legacy field only after the new data-flow read points are stable and documented.
+- One documentation-and-code consistency pass when it directly unlocks the next runtime change.
+
+Poor Claude-sized tasks:
+
+- "Continue the refactor" without allowed files, acceptance criteria, or verification.
+- A single trivial helper extraction that does not reduce coupling or line count meaningfully.
+- A high-risk production deletion without old/new logic comparison, rollback notes, or P0 verification expectations.
+
+For large component slimming, do not dispatch work as "move one method" unless the method is unusually risky. Dispatch a cohesive group instead:
+
+- Extract 5-20 related methods or one UI/business section at a time.
+- Keep the Vue component as the orchestration surface only when it still needs `$set`, `$refs`, UI events, or local component state.
+- Move pure decision logic, payload building, branch resolution, and reusable execution methods into `singleDataFlow` files.
+- Require Chinese comments when the user/project asks for Chinese comments. Comments should explain historical compatibility, branch reasons, and why UI-side side effects remain in the component.
+- Require Claude to report original line count, new line count, changed files, verification result, and remaining risks.
 
 ## Workflow
 
@@ -41,7 +76,9 @@ When planning is needed, create or update the target project's plan files before
 - `findings.md`: old logic chain, new data-flow entry, branch conditions, API calls, state mutations, UI invariants.
 - `progress.md`: dispatch history, Claude results, Codex review findings, verification results.
 
-The dispatchable unit should be a leaf task from the plan. Do not ask Claude to handle a vague direction. The prompt should point to the relevant plan section but still repeat the exact scope and constraints, because plan files are memory, not a substitute for an executable dispatch prompt.
+The dispatchable unit should be a bounded implementation slice from the plan. Do not ask Claude to handle a vague direction. The prompt should point to the relevant plan section but still repeat the exact scope and constraints, because plan files are memory, not a substitute for an executable dispatch prompt.
+
+Planning should enable execution, not delay it. If the plan already identifies the old logic chain, allowed files, invariants, and verification, dispatch Claude to modify runtime code instead of creating another readiness-only artifact.
 
 ### Continuous Queue Mode
 
@@ -50,7 +87,7 @@ Use this mode when the user explicitly asks for continuous tasks, a task queue, 
 Continuous queue mode means **serial automation with review gates**, not parallel or unattended delegation:
 
 1. Create or update a bounded queue in the target project's planning files. Use an existing `task_plan.md` table when possible; add a `dispatch_queue.md` only when the queue needs extra detail.
-2. Each queue item must be a leaf task with:
+2. Each queue item must be a bounded implementation slice with:
    - task ID and status
    - allowed files or directories
    - forbidden changes
@@ -71,6 +108,8 @@ Continuous queue mode means **serial automation with review gates**, not paralle
    - the user interrupts, pauses, or changes direction
 
 Keep the invariant: at most one Claude Code process is active for this queue unless the user explicitly asks for parallel workers.
+
+Do not stop the queue merely because the next item touches runtime code. Runtime implementation is the point of this mode. Stop only when the scope, invariants, or verification are not clear enough for Codex to review safely.
 
 ### Cost-Aware Worker Model
 
@@ -98,10 +137,12 @@ Use the task size to decide how long to wait before polling:
 | Size | Examples | First wait |
 | --- | --- | --- |
 | Small | single helper, docs update, focused lint fix | 1-2 minutes |
-| Medium | one work package, 2-5 files, build/test expected | 5 minutes |
-| Large | broad refactor slice, many files, build plus docs | 10-15 minutes |
+| Medium | one business chain, 3-8 files, focused component slimming, build/test expected | 5 minutes |
+| Large | broad but bounded refactor slice, 8-15 files, meaningful line-count/coupling reduction, build plus docs | 10-15 minutes |
 
 After the first wait, poll every 2-5 minutes depending on expected runtime. Do not emit frequent progress messages unless the user asks for status.
+
+When the user is explicitly conserving Codex tokens, prefer dispatching medium/large slices and sleeping longer over running many Codex-side inspections between tiny worker tasks.
 
 ### 4. Build the Dispatch Prompt
 
@@ -127,6 +168,8 @@ PROMPT
 ```
 
 Add more `--disallowedTools` entries for task-specific hazards, such as deploy commands or broad file deletes. If the task only needs analysis, use `--permission-mode default` and forbid edit tools.
+
+For implementation/refactor tasks, use `acceptEdits` so Claude can actually modify files. Avoid accidental "analysis-only" dispatches when the user expects forward progress.
 
 ### 5. Wait Efficiently
 
@@ -163,6 +206,13 @@ Review with findings first:
 - Over-broad edits, artifact churn, or changed UI/interaction.
 - Missing comments where the user explicitly requested detailed comments.
 - Mismatch with the planning file's old-logic chain, branch conditions, or acceptance criteria.
+
+Use managerial judgment during review:
+
+- Patch small mechanical issues directly when that is faster and safer than another worker round.
+- Send Claude a focused repair prompt for broader logic mistakes, missed files, incomplete extraction, or false documentation.
+- Reject progress that only adds documents while the task was supposed to reduce runtime coupling.
+- For slimming work, check whether the large file actually got smaller and whether the extracted file owns a coherent business chain.
 
 If the task used `planning-with-files`, update `progress.md` after review. If a phase is complete, update `task_plan.md`; if new old-logic details or risks were discovered, update `findings.md`.
 
@@ -202,8 +252,8 @@ Use this compact queue table inside `task_plan.md` or `dispatch_queue.md`:
 ```markdown
 | Order | Task ID | Goal | Allowed Scope | Verification | Status | Notes |
 | ---: | --- | --- | --- | --- | --- | --- |
-| 1 | T01 | <one leaf task> | <files/dirs> | <commands> | Not Started | <rollback/P0 notes> |
-| 2 | T02 | <one leaf task> | <files/dirs> | <commands> | Not Started | <rollback/P0 notes> |
+| 1 | T01 | <one bounded implementation slice> | <files/dirs> | <commands> | Not Started | <rollback/P0 notes> |
+| 2 | T02 | <one bounded implementation slice> | <files/dirs> | <commands> | Not Started | <rollback/P0 notes> |
 ```
 
 Dispatch cycle:
