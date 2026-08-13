@@ -30,6 +30,7 @@ Think of the relationship as **technical lead and implementation member**:
 - Keep user updates sparse while Claude runs. When the user is conserving tokens, wait longer instead of polling frequently.
 - Continuous work is allowed as a controlled queue. Execute serially by default; dispatch a bounded parallel wave only when every ready item passes the Parallel Wave gate.
 - Prefer fewer, larger, well-bounded tasks over many tiny tasks when the user wants real refactor progress and Codex can review the result.
+- Preserve any Ponytail solution contract already frozen by `loopx-engineering-manager`, `claude-terra-delivery-loop`, or another authoritative task packet. Pass it to Claude verbatim; do not rerun Ponytail, change its intensity/rung/non-goals, or reinterpret its ceiling. When this dispatcher is used directly without an upstream contract, apply Ponytail only if the user explicitly requests it, then freeze the resulting contract before dispatch. Ponytail never permits weakening explicit functionality, security, authorization, validation, accessibility, data integrity, business/state invariants, recovery, rollback, or required verification.
 
 ## Managed Delegated Implementation Mode
 
@@ -80,6 +81,8 @@ When planning is needed, create or update the target project's plan files before
 The dispatchable unit should be a bounded implementation slice from the plan. Do not ask Claude to handle a vague direction. The prompt should point to the relevant plan section but still repeat the exact scope and constraints, because plan files are memory, not a substitute for an executable dispatch prompt.
 
 Planning should enable execution, not delay it. If the plan already identifies the old logic chain, allowed files, invariants, and verification, dispatch Claude to modify runtime code instead of creating another readiness-only artifact.
+
+Reuse an existing LoopX todo, task packet, or plan when it already freezes the work. Do not create planning files merely to mirror an existing queue or to document steps that the bounded dispatch prompt can carry.
 
 ### Parallel Wave Mode
 
@@ -213,6 +216,7 @@ The prompt must be explicit and self-contained. Include:
 
 - Worker ID, wave number, task dependencies, workspace/worktree path, branch or detached base SHA.
 - Exact task name and goal.
+- The exact upstream Ponytail solution contract when present; otherwise the explicitly requested direct-dispatch contract, or `none`. Never synthesize or revise it during prompt assembly.
 - Plan reference when using `planning-with-files`: file path, task ID, and the specific section Claude should follow.
 - Hard constraints: no push/commit/reset, no UI/interaction change unless requested, do not touch build artifacts, preserve existing user changes.
 - Allowed scope and files/directories.
@@ -284,6 +288,7 @@ Review with findings first:
 - Blocking runtime or logic bugs.
 - Verification gaps or false documentation.
 - Over-broad edits, artifact churn, or changed UI/interaction.
+- Unjustified abstractions, dependencies, configuration switches, compatibility layers, scaffolding, or documentation.
 - Missing comments where the user explicitly requested detailed comments.
 - Mismatch with the planning file's old-logic chain, branch conditions, or acceptance criteria.
 
@@ -377,6 +382,9 @@ Task:
 
 Goal:
 <one paragraph>
+
+Ponytail solution contract:
+<copy the frozen upstream contract verbatim; if direct use explicitly requested Ponytail, insert the already-frozen direct contract; otherwise write "none">
 
 Hard constraints:
 1. Do not push or commit.

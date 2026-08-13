@@ -34,6 +34,12 @@
 7. 如果结果不好，Codex 会给 Claude Code 发精确修复任务。
 8. 直到验证通过，或多次失败后由 Codex 接手/报告阻塞。
 
+### Ponytail 方案传递边界
+
+当上游 `loopx-engineering-manager`、`claude-terra-delivery-loop` 或权威任务包已经冻结 Ponytail 方案时，Dispatcher 只把该 contract 原样传给 Claude，不重新运行 Ponytail，也不修改强度、方案层级、非目标或简化上限。这样可以避免底层派发阶段重新决策并覆盖上游方案。
+
+单独使用 Dispatcher 且没有上游 contract 时，只有用户明确要求 Ponytail，Dispatcher 才先冻结一次方案再派发；否则任务包中记录 `none`。Dispatcher 负责传递和执行，不拥有上游方案决策权。
+
 ## 委派实施模式
 
 当用户的目标是节约 Codex token、加快重构或让 Claude Code 承担更多执行工作时，推荐使用委派实施模式。这个模式的原则是：**Claude Code 负责实现，Codex 负责治理**。

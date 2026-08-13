@@ -34,6 +34,12 @@ The skill follows this process:
 7. If the result is not good enough, Codex sends Claude Code a targeted repair prompt.
 8. The loop stops when verification passes or repeated repair attempts hit a real blocker.
 
+### Ponytail Contract Pass-Through
+
+When `loopx-engineering-manager`, `claude-terra-delivery-loop`, or another authoritative task packet has already frozen a Ponytail solution contract, the dispatcher passes that contract to Claude verbatim. It does not rerun Ponytail or change the selected intensity, solution rung, non-goals, or deliberate ceiling. This prevents the lower-level dispatch layer from making a second solution decision that drifts from the upstream plan.
+
+When the dispatcher is used directly without an upstream contract, it creates a Ponytail contract only if the user explicitly requests Ponytail; otherwise the task packet records `none`. The dispatcher transports and executes the decision rather than owning the upstream solution policy.
+
 ## Delegated Implementation Mode
 
 When the user wants to save Codex tokens, accelerate refactoring, or let Claude Code carry more of the implementation load, use delegated implementation mode. The principle is: **Claude Code implements, Codex governs.**
