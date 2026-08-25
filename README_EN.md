@@ -38,7 +38,7 @@ The skill follows this process:
 
 When `loopx-engineering-manager`, `claude-terra-delivery-loop`, or another authoritative task packet has already frozen a Ponytail solution contract, the dispatcher passes that contract to Claude verbatim. It does not rerun Ponytail or change the selected intensity, solution rung, non-goals, or deliberate ceiling. This prevents the lower-level dispatch layer from making a second solution decision that drifts from the upstream plan.
 
-When the dispatcher is used directly without an upstream contract, it creates a Ponytail contract only if the user explicitly requests Ponytail; otherwise the task packet records `none`. The dispatcher transports and executes the decision rather than owning the upstream solution policy.
+When the dispatcher is used directly for coding without an upstream contract, Codex loads Ponytail after inspecting the affected flow and freezing the minimum architecture, then freezes the first sufficient solution at the user's requested intensity or the default `full` level. Only a genuinely non-coding task records `none`. The dispatcher transports and executes the decision; architecture, contracts, and acceptance remain with the primary Codex agent.
 
 ## Delegated Implementation Mode
 

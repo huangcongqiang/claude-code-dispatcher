@@ -38,7 +38,7 @@
 
 当上游 `loopx-engineering-manager`、`claude-terra-delivery-loop` 或权威任务包已经冻结 Ponytail 方案时，Dispatcher 只把该 contract 原样传给 Claude，不重新运行 Ponytail，也不修改强度、方案层级、非目标或简化上限。这样可以避免底层派发阶段重新决策并覆盖上游方案。
 
-单独使用 Dispatcher 且没有上游 contract 时，只有用户明确要求 Ponytail，Dispatcher 才先冻结一次方案再派发；否则任务包中记录 `none`。Dispatcher 负责传递和执行，不拥有上游方案决策权。
+单独使用 Dispatcher 执行编码任务且没有上游 contract 时，Codex 在读完受影响链路并冻结最小架构后加载 Ponytail，按用户指定强度或默认 `full` 冻结最小充分方案；只有真正的非编码任务才记录 `none`。Dispatcher 负责传递和执行，架构、契约与验收仍由 Codex 主 Agent 持有。
 
 ## 委派实施模式
 
